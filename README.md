@@ -6,7 +6,7 @@ This repository contains a summary of OTN and DFO activities in eastern Canada.
 
 - This summary provides an overview of OTN and DFO collaborations in eastern Canada.
 
-- Data is collected, filtered, and visualized to highlight marine research projects.
+- Data is collected, filtered, and visualized to highlight receivers, species tagged, and research projects.
 
 ## Key Sections
 
