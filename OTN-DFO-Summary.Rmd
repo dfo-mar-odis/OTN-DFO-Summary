@@ -1,0 +1,301 @@
+---
+title: "OTN and DFO Activity Summary in Eastern Canada: DRAFT"
+author: Naomi Tress and Jon Pye (OTN), Heather Bowlby and Catalina Gomez (DFO)
+date: "`r Sys.Date()`"
+output:
+  rmdformats::robobook:
+    self_contained: true
+    thumbnails: true
+    lightbox: true
+    gallery: false
+    highlight: tango
+    code_folding: hide
+---
+
+## About this Document 
+
+- This summary has been created using reproducible code, which gathers and filters data from the Ocean Tracking Network (OTN) to highlight activities in which Fisheries and Oceans Canada (DFO) has actively participated as a collaborator in eastern Canada.
+
+- This summary is being prepared with the support of the OTN International Data Management Committee and DFO staff to provide an overview of current OTN DFO activities.
+
+- Please note that while we strive to include all relevant DFO-OTN information in this summary, there may be instances where some projects are not listed. If you are a DFO investigator with an OTN project that you do not see here, we encourage you to contact OTN directly.
+
+## DFO & OTN 
+
+- The Ocean Tracking Network (OTN) is a global platform uniting marine scientists worldwide. OTN deploys acoustic receivers and oceanographic equipment in oceans worldwide, tracking marine species and ocean conditions. Scientists tag marine species with small transmitters, allowing precise monitoring of their movements, migrations, and habitat use. Some animals carry ocean-sensing instruments to monitor their habitat. OTN also collects data from shipboard sampling, satellite imagery, and gliders to assess ocean characteristics. For more information, visit http://oceantrackingnetwork.org/.
+
+- The Department of Fisheries and Oceans (DFO) is a partner in the OTN effort: https://www.dfo-mpo.gc.ca/science/mammals-mammiferes/otn/index-eng.html DFO plays a role in OTN projects by deploying receivers, tagging species, and/or contributing to research efforts. DFO scientists also upload data to OTN's database to manage and ensure data quality.
+
+## OTN Data Wrangling
+
+In this section, we gather data from OTN and leverage it to create informative maps and plots for this summary document. Our process involves data acquisition, filtering, and visualization. Below, we provide a brief overview of these steps, and you can expand the code sections to see the full data wrangling process.
+
+
+```{r setup, include=FALSE}
+library(tidyverse)
+library(lubridate)
+```
+
+```{r Set project bounds}
+proj_start <- ymd("20190101")
+proj_end <- ymd("20230909")
+proj_long_upp <- -40.00
+proj_long_low <- -70.00
+proj_lat_upp <- 60.00
+proj_lat_low <- 40.00
+```
+
+```{r Import receiver data from the geoserver, warning=FALSE, message=FALSE}
+geoserver_receivers <- readr::read_csv('https://members.oceantrack.org/geoserver/otn/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=otn:stations_receivers&outputFormat=csv', guess_max = 13579)
+```
+
+```{r Import animal data from the geoserver, warning=FALSE, message=FALSE}
+geoserver_tag_releases <- readr::read_csv('https://members.oceantrack.org/geoserver/otn/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=otn:animals&outputFormat=csv', guess_max = 13579)
+
+geoserver_tag_releases <- geoserver_tag_releases %>%
+  filter(yearcollected > 2018)
+```
+
+```{r Import project data from the geoserver, warning=FALSE, message=FALSE}
+geoserver_projects <- readr::read_csv('https://members.oceantrack.org/geoserver/otn/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=otn:otn_resources_metadata_points&outputFormat=csv', guess_max = 13579)
+```
+
+```{r Filter receivers data}
+otn_stations <- geoserver_receivers %>%
+  filter(!is.na(deploy_date)) %>%
+  filter((deploy_date > proj_start & deploy_date < proj_end) |
+         (recovery_date < proj_end & recovery_date > proj_start) |
+         (deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(18, 'months')) |
+         (grepl('VR3', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(4, 'years')) |
+         (grepl('VR4', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(6, 'years'))) %>%
+  filter(stn_lat >= proj_lat_low & stn_lat <= proj_lat_upp &
+         stn_long >= proj_long_low & stn_long <= proj_long_upp)
+```
+
+```{r Filter animals data}
+# Define the columns to keep
+columns_to_keep <- c("FID", "institutioncode", "datacenter_reference", "scientificname", "vernacularname",
+                      "longitude", "latitude", "basisofrecord", "yearcollected", "collector", "classname")
+
+# Filter and select the desired columns
+otn_animals <- geoserver_tag_releases %>%
+  filter(longitude >= proj_long_low & longitude <= proj_long_upp &
+         latitude >= proj_lat_low & latitude <= proj_lat_upp) %>%
+  select(all_of(columns_to_keep))
+```
+
+```{r Filter project data}
+# Define the columns to keep
+columns_to_keep_projects <- c("FID", "resource_full_name", "ocean", "seriescode", "status", "collaborationtype")
+
+# Filter and select the desired columns
+otn_projects <- geoserver_projects %>%
+   filter(seriescode == "DFOCanada") %>%
+    select(all_of(columns_to_keep_projects))
+```
+
+## OTN Summary of Receivers in Eastern Canada 
+
+```{r OTN receivers map}
+library(leaflet)
+
+# Create a Leaflet map
+map <- leaflet(otn_stations) %>%
+  addTiles()  # Add default basemap
+
+# Add circle markers for each station
+map <- map %>%
+  addCircleMarkers(
+    lng = ~stn_long,
+    lat = ~stn_lat,
+    label = ~paste(seriescode, instrumenttype, sep = " - "),
+    radius = 0.5,  # Adjust the circle marker size as needed
+    color = ~ifelse(seriescode == "DFOCanada", "red", "blue"),  # Marker color
+    fillOpacity = 0.8  # Adjust fill opacity
+  )
+
+#Add bounding box based on filter
+map <- map %>%
+  addRectangles(
+    lng1 = proj_long_low,  # Left longitude
+    lat1 = proj_lat_low,   # Lower latitude
+    lng2 = proj_long_upp,  # Right longitude
+    lat2 = proj_lat_upp,   # Upper latitude
+    weight = 2.5,            # Border width
+    color = "darkorange",       # Border color
+    fill = FALSE           # Don't fill the rectangle
+  )
+
+map <- map %>%
+  addLegend(
+    position = "bottomleft",
+    colors = c("blue", "red", "darkorange"),
+    labels = c("All OTN", "OTN-DFO", "Data filter"),
+    title = "Legend"
+    )
+
+map <- map %>%
+  addControl(
+    html = sprintf("<strong>Filter:</strong> %s - %s", proj_start, proj_end)
+  )
+```
+
+```{r OTN receivers table}
+# Calculate the total number of receivers for each seriescode
+summary_table <- otn_stations %>%
+  group_by(seriescode) %>%
+  summarize(
+    Total_Receivers = n()) %>%
+  mutate(Percentage_Relative_To_Total = round((Total_Receivers / sum(Total_Receivers)) * 100, 0))  # Calculate percentage and round
+
+# Print table 
+table_receivers<- knitr::kable(summary_table, 
+                  format = "markdown",
+                  align = "l", 
+                  width = "100%")
+```
+
+_Disclaimer: Information includes data that has been filtered for specific criteria relevant for eastern Canada and does not encompass all available OTN data. For a comprehensive dataset, please visit the OTN website._
+
+```{r receivers visuals}
+# Display the map and table
+map
+table_receivers
+```
+
+## OTN Summary of Species Tagged in Eastern Canada as part of DFO projects 
+
+This section is a summary of the OTN-DFO data, focusing on # of animals tagged by species in Eastern Canada. It includes the following elements:
+
+- Number of animals tagged (i.e. number of tags deployed) displayed on the y-axis.
+- Species displayed on the x-axis.
+- A summary statistic comparing the number of animals tagged with involvement from DFO 
+
+```{r barplot of animals tagged, warning=FALSE, message=FALSE}
+# Create a summary table with counts of animals tagged by species
+summary_otn_animals <- otn_animals %>%
+  group_by(vernacularname) %>%
+  summarise(Count = n(),
+            Count_DFO = sum(grepl("DFO", institutioncode)))
+
+# Reorder the levels of vernacularname based on Count in descending order
+summary_otn_animals <- summary_otn_animals %>%
+  arrange(desc(Count)) %>%
+  mutate(vernacularname = factor(vernacularname, levels = vernacularname))
+
+library(plotly)
+plot_animals <- ggplot(summary_otn_animals, aes(x = vernacularname)) +
+  geom_bar(aes(y = Count, fill = "OTN"), stat = "identity", position = "dodge") +
+  geom_bar(aes(y = Count_DFO, fill = "OTN-DFO"), stat = "identity", position = "dodge") +
+  labs(
+    title = "Number of Animals Tagged by Species in Eastern Canada",
+    x = "Species",
+    y = "Number of Animals Tagged"
+  ) +
+  theme_minimal() +
+  theme(axis.text.x = element_text(angle = 45, hjust = 1)) +
+  coord_flip() +
+  scale_fill_manual(values = c("OTN" = "blue", "OTN-DFO" = "red"))
+
+# Convert the ggplot plot to a plotly object
+interactive_plot <- ggplotly(plot_animals) %>%
+  layout(legend = list(x = 0.5, y = 1))
+```
+
+```{r map of animals tagged}
+# Create a Leaflet map named map_animals
+map_animals <- leaflet(otn_animals) %>%
+  addTiles()  # Add default basemap
+
+# Add circle markers for each animal tagged
+map_animals <- map_animals %>%
+  addCircleMarkers(
+    lng = ~longitude,
+    lat = ~latitude,
+    label = ~paste(institutioncode, scientificname, vernacularname, yearcollected, collector, sep = " - "),
+    radius = 0.5,  # Adjust the circle marker size as needed
+    color = ~ifelse(grepl("DFO", institutioncode), "red", "blue"),  # Marker color
+    fillOpacity = 0.8  # Adjust fill opacity
+  )
+
+#Add bounding box based on filter
+map_animals <- map_animals %>%
+    addRectangles(
+    lng1 = proj_long_low,  # Left longitude
+    lat1 = proj_lat_low,   # Lower latitude
+    lng2 = proj_long_upp,  # Right longitude
+    lat2 = proj_lat_upp,   # Upper latitude
+    weight = 2.5,            # Border width
+    color = "darkorange",       # Border color
+    fill = FALSE           # Don't fill the rectangle
+  )
+
+# Add legend
+map_animals <- map_animals %>%
+  addLegend(
+    position = "bottomleft",
+    colors = c("blue", "red", "darkorange"),
+    labels = c("OTN", "OTN-DFO", "Data filter"),
+    title = "Legend"
+  )
+
+
+# Create a text box to display min and max years
+min_year <- min(otn_animals$yearcollected)
+max_year <- max(otn_animals$yearcollected)
+map_animals <- map_animals %>%
+  addControl(
+    html = sprintf("<strong>Year Collected Range:</strong> %d - %d", min_year, max_year),
+    position = "topleft"
+  )
+```
+
+```{r animals tagged visuals}
+map_animals
+interactive_plot
+knitr::kable(summary_otn_animals, format = "markdown", 
+      col.names = c("Species", "OTN", "OTN-DFO"),
+      caption = "Summary of Animals Tagged by Species in Eastern Canada")
+```
+
+## OTN and DFO Project Summaries 
+
+This section provides an overview of the **`r nrow(otn_projects)`** DFO-OTN projects available in the OTN database. 
+
+We have applied a basic filter in this section, considering projects affiliated with DFO, without specific filters related to years or geographic locations. 
+
+Please note that while we strive to include all relevant DFO-OTN projects in this summary, there may be instances where some projects are not listed. If you are a DFO researcher with an OTN project that you do not see here, we encourage you to contact OTN directly.
+
+For the most up-to-date and comprehensive information on OTN projects and their participants, please visit the official OTN website: [OTN Website](https://members.oceantrack.org/data/discovery/bycontact.htm)
+
+```{r project visuals}
+stacked_bar_plot <- ggplot(otn_projects, aes(x = collaborationtype, fill = status)) +
+  geom_bar() +
+  labs(title = "Collaboration Type Distribution") +
+  theme_minimal() +
+  scale_fill_manual(values = c("ongoing" = "green", "completed" = "blue", "proposed" = "orange")) +
+  coord_flip() 
+
+# Convert the ggplot to a plotly object
+interactive_stacked_bar_plot <- ggplotly(stacked_bar_plot)
+
+interactive_stacked_bar_plot %>%
+  layout(legend = list(x = 0.5, y = 1))
+```
+
+```{r project table}
+knitr::kable(otn_projects[, c("resource_full_name", "ocean", "status", "collaborationtype")],
+      caption = "Summary of DFO-OTN Projects",
+      format = "html",
+      col.names = c("Project Title", "Ocean", "Status", "Collaboration Type"))
+```
+
+Future work includes creating the following additional information for projects:
+
+- Project Title:
+- Citation:
+- Points of contact:
+- Species tagged:
+- Abstract:
+
+

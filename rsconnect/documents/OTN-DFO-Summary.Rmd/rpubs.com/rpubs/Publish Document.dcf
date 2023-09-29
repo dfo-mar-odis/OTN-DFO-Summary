@@ -1,0 +1,11 @@
+name: Publish Document
+title:
+username:
+account: rpubs
+server: rpubs.com
+hostUrl: rpubs.com
+appId: https://api.rpubs.com/api/v1/document/1090798/f942cd19d62c4a089e634392441d778b
+bundleId: https://api.rpubs.com/api/v1/document/1090798/f942cd19d62c4a089e634392441d778b
+url: http://rpubs.com/MaritimesMSP/1090798
+when: 1696015770.44096
+lastSyncTime: 1696015770.44097
