@@ -34,8 +34,10 @@ In this section, we gather data from OTN and leverage it to create informative m
 
 
 ```{r setup, include=FALSE}
-library(tidyverse)
 library(lubridate)
+library(leaflet)
+library(plotly)
+library(tidyverse)
 ```
 
 ```{r Set project bounds}
@@ -99,8 +101,6 @@ otn_projects <- geoserver_projects %>%
 ## OTN Summary of Receivers in Eastern Canada 
 
 ```{r OTN receivers map}
-library(leaflet)
-
 # Create a Leaflet map
 map <- leaflet(otn_stations) %>%
   addTiles()  # Add default basemap
@@ -185,7 +185,6 @@ summary_otn_animals <- summary_otn_animals %>%
   arrange(desc(Count)) %>%
   mutate(vernacularname = factor(vernacularname, levels = vernacularname))
 
-library(plotly)
 plot_animals <- ggplot(summary_otn_animals, aes(x = vernacularname)) +
   geom_bar(aes(y = Count, fill = "OTN"), stat = "identity", position = "dodge") +
   geom_bar(aes(y = Count_DFO, fill = "OTN-DFO"), stat = "identity", position = "dodge") +
