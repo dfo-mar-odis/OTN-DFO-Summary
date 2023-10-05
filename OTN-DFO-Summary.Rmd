@@ -1,6 +1,6 @@
 ---
 title: "OTN and DFO Activity Summary in Eastern Canada: DRAFT"
-author: Naomi Tress and Jon Pye (OTN), Heather Bowlby and Catalina Gomez (DFO)
+author: Naomi Tress and Jon Pye (OTN), Heather Bowlby, Rémi Daigle, and Catalina Gomez (DFO)
 date: "`r Sys.Date()`"
 output:
   rmdformats::robobook:
@@ -51,7 +51,7 @@ proj_lat_upp <- 60.00
 proj_lat_low <- 40.00
 ```
 
-```{r Import MPAs from Open Data}
+```{r Import MPAs from Open Data, warning=FALSE, message=FALSE}
 url <- "https://gisp.dfo-mpo.gc.ca/arcgis/rest/services/FGP/Oceans_Act_Marine_Protected_Areas/MapServer/0"
 MPAs <- get_spatial_layer(url) %>% 
   st_make_valid() %>% 
@@ -78,26 +78,34 @@ geoserver_projects <- readr::read_csv('https://members.oceantrack.org/geoserver/
 ```
 
 ```{r Filter receivers data}
+# Filter the geoserver_receivers dataset to select relevant stations 
+
 otn_stations <- geoserver_receivers %>%
+  # Remove rows with missing deploy_date values
   filter(!is.na(deploy_date)) %>%
+  
+  # Select stations that fall within the project timeframe defined above
   filter((deploy_date > proj_start & deploy_date < proj_end) |
-         (recovery_date < proj_end & recovery_date > proj_start) |
-         (deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(18, 'months')) |
-         (grepl('VR3', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(4, 'years')) |
-         (grepl('VR4', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(6, 'years'))) %>%
+           (recovery_date < proj_end & recovery_date > proj_start) |
+           (deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(18, 'months')) |
+           
+           # Select specific models within certain date ranges
+           (grepl('VR3', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(4, 'years')) |
+           (grepl('VR4', model) & deploy_date < proj_end & is.na(recovery_date) & deploy_date > proj_start - duration(6, 'years'))) %>%
+  
+  # Filter stations based on latitude and longitude bounds
   filter(stn_lat >= proj_lat_low & stn_lat <= proj_lat_upp &
-         stn_long >= proj_long_low & stn_long <= proj_long_upp)
+           stn_long >= proj_long_low & stn_long <= proj_long_upp)
 ```
 
 ```{r Filter animals data}
 # Define the columns to keep
-columns_to_keep <- c("FID", "institutioncode", "datacenter_reference", "scientificname", "vernacularname",
-                      "longitude", "latitude", "basisofrecord", "yearcollected", "collector", "classname")
+columns_to_keep <- c("FID", "institutioncode", "datacenter_reference", "scientificname", "vernacularname","longitude", "latitude", "basisofrecord", "yearcollected", "collector", "classname")
 
 # Filter and select the desired columns
 otn_animals <- geoserver_tag_releases %>%
   filter(longitude >= proj_long_low & longitude <= proj_long_upp &
-         latitude >= proj_lat_low & latitude <= proj_lat_upp) %>%
+           latitude >= proj_lat_low & latitude <= proj_lat_upp) %>%
   select(all_of(columns_to_keep))
 ```
 
@@ -107,76 +115,83 @@ columns_to_keep_projects <- c("FID", "resource_full_name", "ocean", "seriescode"
 
 # Filter and select the desired columns
 otn_projects <- geoserver_projects %>%
-   filter(seriescode == "DFOCanada") %>%
-    select(all_of(columns_to_keep_projects))
+  filter(seriescode == "DFOCanada") %>%
+  select(all_of(columns_to_keep_projects))
 ```
 
 ## OTN Summary of Receivers in Eastern Canada 
 
 ```{r OTN receivers map}
-# Create a Leaflet map
+# Create a Leaflet map for receiver stations
 map <- leaflet(otn_stations) %>%
   # Add default basemap
-  addTiles()%>% 
+  addTiles() %>%
   # Add MPA polygons
-  addPolygons(data=MPAs,
-              color = "yellow") 
-
-# Add circle markers for each station
-map <- map %>%
+  addPolygons(data = MPAs, 
+              color = "yellow", 
+              weight = 0, 
+              fillOpacity = 1, 
+              label = ~NAME_E) %>%
+  
+  # Add circle markers for each station
   addCircleMarkers(
     lng = ~stn_long,
     lat = ~stn_lat,
     label = ~paste(seriescode, instrumenttype, sep = " - "),
-    radius = 0.5,  # Adjust the circle marker size as needed
+    radius = 0.5,  # Adjust the circle marker size 
     color = ~ifelse(seriescode == "DFOCanada", "red", "blue"),  # Marker color
     fillOpacity = 0.8  # Adjust fill opacity
-  )
-
-#Add bounding box based on filter
-map <- map %>%
+  ) %>%
+  
+  # Add bounding box based on filter
   addRectangles(
-    lng1 = proj_long_low,  # Left longitude
-    lat1 = proj_lat_low,   # Lower latitude
-    lng2 = proj_long_upp,  # Right longitude
-    lat2 = proj_lat_upp,   # Upper latitude
-    weight = 2.5,            # Border width
-    color = "darkorange",       # Border color
-    fill = FALSE           # Don't fill the rectangle
-  )
-
-map <- map %>%
+    lng1 = proj_long_low,      # Left longitude
+    lat1 = proj_lat_low,       # Lower latitude
+    lng2 = proj_long_upp,      # Right longitude
+    lat2 = proj_lat_upp,       # Upper latitude
+    weight = 2.5,              # Border width
+    color = "darkorange",      # Border color
+    fill = FALSE               # Don't fill the rectangle
+  ) %>%
+  
+  # Add legend for all elements of the plot
   addLegend(
     position = "bottomleft",
     colors = c("blue", "red", "darkorange", "yellow"),
-    labels = c("All OTN", "OTN-DFO", "Data filter","MPA"),
+    labels = c("All OTN", "OTN-DFO", "Data filter", "Marine Protected Areas"),
     title = "Legend"
-    )
-
-map <- map %>%
+  ) %>%
+  
+  # Add filter control displaying the range date
   addControl(
     html = sprintf("<strong>Filter:</strong> %s - %s", proj_start, proj_end)
   )
 ```
 
 ```{r OTN receivers table}
-# Calculate the total number of receivers for each seriescode
+# Calculate the total number of receivers for each seriescode (OTN vs OTN-DFO).
 summary_table <- otn_stations %>%
   group_by(seriescode) %>%
   summarize(
-    Total_Receivers = n()) %>%
-  mutate(Percentage_Relative_To_Total = round((Total_Receivers / sum(Total_Receivers)) * 100, 0))  # Calculate percentage and round
+    Total_Receivers = n()
+  ) %>%
+  # Calculate the percentage relative to the total and round it.
+  mutate(
+    Percentage_Relative_To_Total = round((Total_Receivers / sum(Total_Receivers)) * 100, 0)
+  )
 
-# Print table 
-table_receivers<- knitr::kable(summary_table, 
-                  format = "markdown",
-                  align = "l", 
-                  width = "100%")
+# Print the summary table as a Markdown table.
+table_receivers <- knitr::kable(
+  summary_table, 
+  format = "markdown",
+  align = "l", 
+  width = "100%"
+)
 ```
 
 _Disclaimer: Information includes data that has been filtered for specific criteria relevant for eastern Canada and does not encompass all available OTN data. For a comprehensive dataset, please visit the OTN website._
 
-```{r receivers visuals}
+```{r receivers visuals and table}
 # Display the map and table
 map
 table_receivers
@@ -191,17 +206,20 @@ This section is a summary of the OTN-DFO data, focusing on # of animals tagged b
 - A summary statistic comparing the number of animals tagged with involvement from DFO 
 
 ```{r barplot of animals tagged, warning=FALSE, message=FALSE}
-# Create a summary table with counts of animals tagged by species
+# Create a summary table with counts of animals tagged by species.
 summary_otn_animals <- otn_animals %>%
   group_by(vernacularname) %>%
-  summarise(Count = n(),
-            Count_DFO = sum(grepl("DFO", institutioncode)))
+  summarise(
+    Count = n(),
+    Count_DFO = sum(grepl("DFO", institutioncode))
+  )
 
-# Reorder the levels of vernacularname based on Count in descending order
+# Reorder the levels of vernacularname based on Count 
 summary_otn_animals <- summary_otn_animals %>%
   arrange(desc(Count)) %>%
   mutate(vernacularname = factor(vernacularname, levels = vernacularname))
 
+# Create a bar plot using ggplot2.
 plot_animals <- ggplot(summary_otn_animals, aes(x = vernacularname)) +
   geom_bar(aes(y = Count, fill = "OTN"), stat = "identity", position = "dodge") +
   geom_bar(aes(y = Count_DFO, fill = "OTN-DFO"), stat = "identity", position = "dodge") +
@@ -215,41 +233,38 @@ plot_animals <- ggplot(summary_otn_animals, aes(x = vernacularname)) +
   coord_flip() +
   scale_fill_manual(values = c("OTN" = "blue", "OTN-DFO" = "red"))
 
-# Convert the ggplot plot to a plotly object
+# Convert the ggplot plot to an interactive plot using plotly.
 interactive_plot <- ggplotly(plot_animals) %>%
   layout(legend = list(x = 0.5, y = 1))
 ```
 
 ```{r map of animals tagged}
-# Create a Leaflet map named map_animals
+# Create a Leaflet map to visualize were animals were originally tagged
 map_animals <- leaflet(otn_animals) %>%
-  addTiles()  # Add default basemap
+  addTiles() %>%
 
-# Add circle markers for each animal tagged
-map_animals <- map_animals %>%
+  # Add circle in the map for each animal tagged.
   addCircleMarkers(
     lng = ~longitude,
     lat = ~latitude,
     label = ~paste(institutioncode, scientificname, vernacularname, yearcollected, collector, sep = " - "),
-    radius = 0.5,  # Adjust the circle marker size as needed
-    color = ~ifelse(grepl("DFO", institutioncode), "red", "blue"),  # Marker color
-    fillOpacity = 0.8  # Adjust fill opacity
-  )
+    radius = 0.5,
+    color = ~ifelse(grepl("DFO", institutioncode), "red", "blue"),
+    fillOpacity = 0.8
+  ) %>%
 
-#Add bounding box based on filter
-map_animals <- map_animals %>%
-    addRectangles(
-    lng1 = proj_long_low,  # Left longitude
-    lat1 = proj_lat_low,   # Lower latitude
-    lng2 = proj_long_upp,  # Right longitude
-    lat2 = proj_lat_upp,   # Upper latitude
-    weight = 2.5,            # Border width
-    color = "darkorange",       # Border color
-    fill = FALSE           # Don't fill the rectangle
-  )
+  # Add bounding box based on filter defined at the beginning of code.
+  addRectangles(
+    lng1 = proj_long_low,
+    lat1 = proj_lat_low,
+    lng2 = proj_long_upp,
+    lat2 = proj_lat_upp,
+    weight = 2.5,
+    color = "darkorange",
+    fill = FALSE
+  ) %>%
 
-# Add legend
-map_animals <- map_animals %>%
+  # Add legend for different elements of the map.
   addLegend(
     position = "bottomleft",
     colors = c("blue", "red", "darkorange"),
@@ -257,10 +272,11 @@ map_animals <- map_animals %>%
     title = "Legend"
   )
 
-
-# Create a text box to display min and max years
+# Calculate the minimum and maximum years in the dataset.
 min_year <- min(otn_animals$yearcollected)
 max_year <- max(otn_animals$yearcollected)
+
+# Add a text box to display the year collected range.
 map_animals <- map_animals %>%
   addControl(
     html = sprintf("<strong>Year Collected Range:</strong> %d - %d", min_year, max_year),
@@ -271,12 +287,19 @@ map_animals <- map_animals %>%
 ```{r animals tagged visuals}
 map_animals
 interactive_plot
+```
 
+```{r animals tagged table}
+# Calculate the percentage of OTN-DFO tagging for each species.
 summary_otn_animals$Percentage = ifelse(summary_otn_animals$Count_DFO == 0, "0%", paste0(round(summary_otn_animals$Count / summary_otn_animals$Count_DFO * 100), "%"))
 
-knitr::kable(summary_otn_animals[, c("vernacularname", "Count", "Percentage")], format = "markdown", 
-      col.names = c("Species", "OTN Total", "% OTN-DFO Tagging"),
-      caption = "Summary of Animals Tagged by Species in Eastern Canada")
+# Create a table with species, OTN total count, and % OTN-DFO tagging.
+knitr::kable(
+  summary_otn_animals[, c("vernacularname", "Count", "Percentage")],
+  format = "markdown", 
+  col.names = c("Species", "OTN Total", "% OTN-DFO Tagging"),
+  caption = "Summary of Animals Tagged by Species in Eastern Canada"
+)
 ```
 
 ## OTN and DFO Project Summaries 
@@ -290,25 +313,30 @@ Please note that while we strive to include all relevant DFO-OTN projects in thi
 For the most up-to-date and comprehensive information on OTN projects and their participants, please visit the official OTN website: [OTN Website](https://members.oceantrack.org/data/discovery/bycontact.htm)
 
 ```{r project visuals}
+# Create a stacked bar plot of collaboration types by status using ggplot2.
 stacked_bar_plot <- ggplot(otn_projects, aes(x = collaborationtype, fill = status)) +
-  geom_bar() +
-  labs(title = "Collaboration Type Distribution") +
-  theme_minimal() +
-  scale_fill_manual(values = c("ongoing" = "green", "completed" = "blue", "proposed" = "orange")) +
-  coord_flip() 
+  geom_bar() +  # Create a bar plot.
+  labs(title = "Collaboration Type Distribution") +  # Set the plot title.
+  theme_minimal() +  # Use a minimal theme.
+  scale_fill_manual(values = c("ongoing" = "green", "completed" = "blue", "proposed" = "orange")) +  # Define fill colors.
+  coord_flip()  # Flip the coordinates for horizontal bars.
 
-# Convert the ggplot to a plotly object
+# Convert the ggplot plot to a plotly object.
 interactive_stacked_bar_plot <- ggplotly(stacked_bar_plot)
 
+# Customize the layout of the interactive plot.
 interactive_stacked_bar_plot %>%
-  layout(legend = list(x = 0.5, y = 1))
+  layout(legend = list(x = 0.5, y = 1))  # Adjust the position of the legend.
 ```
 
 ```{r project table}
-knitr::kable(otn_projects[, c("resource_full_name", "ocean", "status", "collaborationtype")],
-      caption = "Summary of DFO-OTN Projects",
-      format = "html",
-      col.names = c("Project Title", "Ocean", "Status", "Collaboration Type"))
+# Create an HTML table using knitr::kable to display a summary of DFO-OTN projects.
+knitr::kable(
+  otn_projects[, c("resource_full_name", "ocean", "status", "collaborationtype")],
+  caption = "Summary of DFO-OTN Projects",
+  format = "html",
+  col.names = c("Project Title", "Ocean", "Status", "Collaboration Type")
+)
 ```
 
 Future work includes creating the following additional information for projects:
