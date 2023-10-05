@@ -177,8 +177,11 @@ summary_table <- otn_stations %>%
   ) %>%
   # Calculate the percentage relative to the total and round it.
   mutate(
-    Percentage_Relative_To_Total = round((Total_Receivers / sum(Total_Receivers)) * 100, 0)
-  )
+    Percentage_Relative_To_Total = paste(round((Total_Receivers / sum(Total_Receivers)) * 100, 0), "%"))
+
+# Rename columns
+colnames(summary_table)[colnames(summary_table) == "Total_Receivers"] <- "Total # of Receivers"
+colnames(summary_table)[colnames(summary_table) == "Percentage_Relative_To_Total"] <- "% Receivers relative to total"
 
 # Print the summary table as a Markdown table.
 table_receivers <- knitr::kable(
@@ -187,6 +190,7 @@ table_receivers <- knitr::kable(
   align = "l", 
   width = "100%"
 )
+
 ```
 
 _Disclaimer: Information includes data that has been filtered for specific criteria relevant for eastern Canada and does not encompass all available OTN data. For a comprehensive dataset, please visit the OTN website._
@@ -242,6 +246,13 @@ interactive_plot <- ggplotly(plot_animals) %>%
 # Create a Leaflet map to visualize were animals were originally tagged
 map_animals <- leaflet(otn_animals) %>%
   addTiles() %>%
+  
+  # Add MPA polygons
+  addPolygons(data = MPAs, 
+              color = "yellow", 
+              weight = 0, 
+              fillOpacity = 1, 
+              label = ~NAME_E) %>%
 
   # Add circle in the map for each animal tagged.
   addCircleMarkers(
@@ -267,8 +278,8 @@ map_animals <- leaflet(otn_animals) %>%
   # Add legend for different elements of the map.
   addLegend(
     position = "bottomleft",
-    colors = c("blue", "red", "darkorange"),
-    labels = c("OTN", "OTN-DFO", "Data filter"),
+    colors = c("blue", "red", "darkorange", "yellow"),
+    labels = c("All OTN", "OTN-DFO", "Data filter", "Marine Protected Areas"),
     title = "Legend"
   )
 
@@ -285,8 +296,8 @@ map_animals <- map_animals %>%
 ```
 
 ```{r animals tagged visuals}
-map_animals
 interactive_plot
+map_animals
 ```
 
 ```{r animals tagged table}
@@ -347,4 +358,6 @@ Future work includes creating the following additional information for projects:
 - Species tagged:
 - Abstract:
 
+## Questions and Suggestions
 
+If you have any questions or suggestions regarding this reproducible report, please don't hesitate to reach out to Catalina.Gomez@dfo-mpo.gc.ca and/or Jonathan.Pye@dal.ca. We welcome any inquiries or ideas to enhance the content or clarity of this report.
