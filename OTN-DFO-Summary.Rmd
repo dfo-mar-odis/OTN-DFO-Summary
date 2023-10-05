@@ -34,8 +34,12 @@ In this section, we gather data from OTN and leverage it to create informative m
 
 
 ```{r setup, include=FALSE}
-library(tidyverse)
 library(lubridate)
+library(leaflet)
+library(plotly)
+library(arcpullr)
+library(sf)
+library(tidyverse)
 ```
 
 ```{r Set project bounds}
@@ -46,6 +50,17 @@ proj_long_low <- -70.00
 proj_lat_upp <- 60.00
 proj_lat_low <- 40.00
 ```
+
+```{r Import MPAs from Open Data}
+url <- "https://gisp.dfo-mpo.gc.ca/arcgis/rest/services/FGP/Oceans_Act_Marine_Protected_Areas/MapServer/0"
+MPAs <- get_spatial_layer(url) %>% 
+  st_make_valid() %>% 
+  st_crop(xmin=proj_long_low,
+          ymin=proj_lat_low,
+          xmax=proj_long_upp,
+          ymax=proj_lat_upp)
+```
+
 
 ```{r Import receiver data from the geoserver, warning=FALSE, message=FALSE}
 geoserver_receivers <- readr::read_csv('https://members.oceantrack.org/geoserver/otn/ows?service=WFS&version=1.0.0&request=GetFeature&typeName=otn:stations_receivers&outputFormat=csv', guess_max = 13579)
@@ -99,11 +114,13 @@ otn_projects <- geoserver_projects %>%
 ## OTN Summary of Receivers in Eastern Canada 
 
 ```{r OTN receivers map}
-library(leaflet)
-
 # Create a Leaflet map
 map <- leaflet(otn_stations) %>%
-  addTiles()  # Add default basemap
+  # Add default basemap
+  addTiles()%>% 
+  # Add MPA polygons
+  addPolygons(data=MPAs,
+              color = "yellow") 
 
 # Add circle markers for each station
 map <- map %>%
@@ -131,8 +148,8 @@ map <- map %>%
 map <- map %>%
   addLegend(
     position = "bottomleft",
-    colors = c("blue", "red", "darkorange"),
-    labels = c("All OTN", "OTN-DFO", "Data filter"),
+    colors = c("blue", "red", "darkorange", "yellow"),
+    labels = c("All OTN", "OTN-DFO", "Data filter","MPA"),
     title = "Legend"
     )
 
@@ -185,7 +202,6 @@ summary_otn_animals <- summary_otn_animals %>%
   arrange(desc(Count)) %>%
   mutate(vernacularname = factor(vernacularname, levels = vernacularname))
 
-library(plotly)
 plot_animals <- ggplot(summary_otn_animals, aes(x = vernacularname)) +
   geom_bar(aes(y = Count, fill = "OTN"), stat = "identity", position = "dodge") +
   geom_bar(aes(y = Count_DFO, fill = "OTN-DFO"), stat = "identity", position = "dodge") +
