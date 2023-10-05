@@ -14,7 +14,7 @@ output:
 
 ## About this Document 
 
-- This summary has been created using reproducible code, which gathers and filters data from the Ocean Tracking Network (OTN) to highlight activities in which Fisheries and Oceans Canada (DFO) has actively participated in eastern Canada.
+- This summary has been created using reproducible code (https://github.com/dfo-mar-odis/OTN-DFO-Summary), which gathers and filters data from the Ocean Tracking Network (OTN) to highlight activities in which Fisheries and Oceans Canada (DFO) has actively participated in eastern Canada.
 
 - This summary is being prepared with the support of the OTN International Data Management Committee and DFO staff to provide an overview of current OTN DFO activities.
 
